@@ -1,5 +1,8 @@
 from rest_framework import serializers
 from .models import User
+from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
+from django.contrib.auth import authenticate
+from django.contrib.auth import get_user_model
 
 class RegisterSerializer(serializers.ModelSerializer):
     password = serializers.CharField(write_only=True)
@@ -26,3 +29,29 @@ class RegisterSerializer(serializers.ModelSerializer):
         gender = validated_data.pop('gender')
         user = User.objects.create_user(**validated_data, gender=gender)
         return user
+
+
+User = get_user_model()
+
+class CustomTokenObtainPairSerializer(TokenObtainPairSerializer):
+    username_field = "email"
+
+    def validate(self, attrs):
+        email = attrs.get("email")
+        password = attrs.get("password")
+
+        user = authenticate(request=self.context.get("request"), email=email, password=password)
+
+        if not user:
+            raise serializers.ValidationError("Неверный email или пароль")
+
+        # ключ должен быть "email", а не "username"
+        data = super().validate({
+            "email": user.email,
+            "password": password,
+        })
+
+        return {
+            "access_token": data["access"],
+            "token_type": "bearer"
+        }
